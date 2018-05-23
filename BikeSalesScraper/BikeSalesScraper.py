@@ -8,6 +8,9 @@ import unidecode
 import re
 import time
 
+# helpful insight
+#https://stackoverflow.com/questions/33718932/missing-data-when-scraping-website-using-loop?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+
 
 def is_good_response(resp):
     """
@@ -24,7 +27,7 @@ def get_html_content(url):
     """
     # Be a responisble scraper.
     time.sleep(2)
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6'}
+    headers = {'User-Agent': 'Mozilla/5.0'} # (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6'}
     # Firefox on Windows: Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6
     # Firefox on Mac: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36
     # Chrome on Linux: Mozilla/5.0 (X11; U; Linux i686; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3
@@ -47,6 +50,8 @@ def get_html_content(url):
         print('Error during requests to {0} : {1}'.format(url, str(e)))
 #        ConnectionError(ProtocolError('Connection aborted.', RemoteDisconnected('Remote end closed connection without response',)),)
 #        ConnectionError(ProtocolError('Connection aborted.', OSError("(10060, 'WSAETIMEDOUT')",)),)
+#        ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)
+       
 
 def getBikeDetails(htmlContents):
     
@@ -110,22 +115,13 @@ if __name__ == '__main__':
     
     #roadBikeURL = baseUrl+'road/photots_only/'
     #url = roadBikeURL+extension
-    url = baseUrl+'/bikes/?Q=%28Service%3D%5BBikesales%5D%26%28%28%28%28SiloType%3D%5BBrand%20new%20bikes%20available%5D%7CSiloType%3D%5BBrand%20new%20bikes%20in%20stock%5D%29%7CSiloType%3D%5BDealer%20used%20bikes%5D%29%7CSiloType%3D%5BDemo%20%26%20near%20new%20bikes%5D%29%7CSiloType%3D%5BPrivate%20used%20bikes%5D%29%29&Sort=Premium&Offset='+str(offset)+'&Limit='+str(pagelimit)+'&SearchAction=Pagination'
-    
+    url = baseUrl+'/bikes/?q=Service%3D%5BBikesales%5D'
+
     #Search page
     content = get_html_content(url)
 
     # Get a list of all ski resorts (go through each page)
     html = BeautifulSoup(content, 'html.parser')
-    
-
-    '''    pageLinks = html.find("ul", {"id": "pagebrowser1"})
-    # Extract the total number of pages
-    lastPageNumber = int(re.findall('[0-9][0-9]' ,pageLinks.contents[-2].find('a')['href'])[0])
-
-    # should check for valid 
-    return lastPageNumber
-    '''
 
     BikeList = html.findAll("a", {"class": "item-link-container"})
     # Go to bike URL to get the details
@@ -155,8 +151,17 @@ if __name__ == '__main__':
     if (generalDetails is not None):
         for row in generalDetails.findAll("tr"):
             
-            key = contents[row].contents[1].text
-            if (len(contents[row].contents[3]) == 1):
-                value = contents[row].contents[3].text
+            key = row.contents[1].text
+            if (len(row.contents[3]) == 1):
+                value = row.contents[3].text
             else:
-                value = contents[row].contents[3].find("span", {"class": "price"}).text
+                if (key == "Price"):
+                    value = row.contents[3].find("span", {"class": "price"}).text     
+                    
+                elif (key == "Leaner Approved"):
+                    value = True
+
+                else:
+                    value = "not supported yet"
+
+
