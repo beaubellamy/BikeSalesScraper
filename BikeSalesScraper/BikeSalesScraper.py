@@ -26,7 +26,7 @@ def get_html_content(url):
     Retrieve the contents of the url.
     """
     # Be a responisble scraper.
-    time.sleep(2)
+    time.sleep(5)
     headers = {'User-Agent': 'Mozilla/5.0'} # (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6'}
     # Firefox on Windows: Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6
     # Firefox on Mac: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36
@@ -71,48 +71,12 @@ if __name__ == '__main__':
 
     baseUrl = 'https://www.bikesales.com.au'
     
-    '''Bike Type:
-    ATV & Quad >> https://www.bikesales.com.au/bikes/atv-quad/photos-only/
-        Agriculture
-        Electric
-        Fun
-        Sport
-    Dirt Bikes >> https://www.bikesales.com.au/bikes/dirt-bikes/photos-only/
-        Competition
-        Electric Bikes
-        Enduro 2 Stroke
-        Endura 4 Stroke
-        Farm
-        Fun
-        Motocross 2 Stroke
-        Motocross 4 Stroke
-        Trail
-        Trails
-    Racing >> https://www.bikesales.com.au/bikes/racing/photos-only/
-        Replica
-    Road >> https://www.bikesales.com.au/bikes/road/photos-only/
-        Adventure Sport
-        Adventure Touring
-        Cruiser
-        Naked
-        Scooters
-        Sport Touring
-        Super Motard
-        Super Sport
-        Touring
-        Vintage
-    SxS & UTV >> https://www.bikesales.com.au/bikes/sxs-utv/photos-only/
-        Recreational Utility
-        Sport
-        Utility
-
-    Bike Make
-    '''
     # loop over each page
     index = 0
     pagelimit = 50
     offset = index* pagelimit
-    
+    bikeSales = {}
+
     #roadBikeURL = baseUrl+'road/photots_only/'
     #url = roadBikeURL+extension
     url = baseUrl+'/bikes/?q=Service%3D%5BBikesales%5D'
@@ -125,43 +89,49 @@ if __name__ == '__main__':
 
     BikeList = html.findAll("a", {"class": "item-link-container"})
     # Go to bike URL to get the details
-    loopindex = 0
 
-    individualBikeURL = BikeList[loopindex].attrs['href']
-    BikeContent = get_html_content(baseUrl+individualBikeURL)
-    # connection time out error after a few iterations
-    #getBikeDetails(BikeContent)
+    bikesPerPage = len(BikeList)
+    for loopindex in range(bikesPerPage):
+        individualBikeURL = BikeList[loopindex].attrs['href']
+        BikeContent = get_html_content(baseUrl+individualBikeURL)
 
-    #getBikeDetails
-    content = BeautifulSoup(BikeContent, 'html.parser')
+        # occaissionally the connection is lost, so try again.
+        while (BikeContent == None):
+            BikeContent = get_html_content(baseUrl+individualBikeURL)
+            # Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
 
-    #bikeHeader = content.find("div", {"class": "content-header"})
-    #title = bikeHeader.contents[1].text
-    #price = bikeHeader.find("span", {"class": "price"}).text
-    # remove any weird charcters like $,*, maybe the comma as well
+        # connection time out error after a few iterations
+        #getBikeDetails(BikeContent)
 
-    #Photos:
-    #content.find("a", {"class": "main-image-link"})
-    #Multiple list of photos
-    #content.find("ul", {"class": "thumbnails jcarousel-list jcarousel-list-horizontal"})
+        #getBikeDetails
+        content = BeautifulSoup(BikeContent, 'html.parser')
 
-    generalDetails = content.find("section", {"class": "general-details"})
 
-    #print("Slope Statistics:")
-    if (generalDetails is not None):
-        for row in generalDetails.findAll("tr"):
+        #Photos:
+        #content.find("a", {"class": "main-image-link"})
+        #Multiple list of photos
+        #content.find("ul", {"class": "thumbnails jcarousel-list jcarousel-list-horizontal"})
+
+        details = content.findAll("tr")
+
+        bikeDetails = {}
+
+        if (details is not None):
+            for i in range(len(details)):
             
-            key = row.contents[1].text
-            if (len(row.contents[3]) == 1):
-                value = row.contents[3].text
-            else:
-                if (key == "Price"):
-                    value = row.contents[3].find("span", {"class": "price"}).text     
-                    
-                elif (key == "Leaner Approved"):
-                    value = True
+                key = details[i].contents[1].text
+                value = details[i].contents[3].text
 
-                else:
-                    value = "not supported yet"
+                print ("{0}: {1}".format(key,value))
+                # clean extranious characters from values, eg Price, Odometer, capacity
 
+                # if key = Bike Facts, value = true
+                # if key = compression ratio, clean the value of +- error
+                # potentially clean extra detail in value.
 
+                bikeDetails[key] = value
+
+            bikeSales[bikeDetails['Ref Code']] = {**bikeDetails}
+
+    df = pd.DataFrame.from_dict(bikeSales, orient='index')
+    df.to_csv('bikeSales.csv', index=False)
