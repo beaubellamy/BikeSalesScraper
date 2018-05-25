@@ -10,7 +10,7 @@ import time
 
 # helpful insight
 #https://stackoverflow.com/questions/33718932/missing-data-when-scraping-website-using-loop?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
-
+# https://stackoverflow.com/questions/9446387/how-to-retry-urllib2-request-when-fails
 
 def is_good_response(resp):
     """
@@ -21,12 +21,12 @@ def is_good_response(resp):
             content_type is not None 
             and content_type.find('html') > -1)
 
-def get_html_content(url):
+def get_html_content(url, multiplier=1):
     """
     Retrieve the contents of the url.
     """
     # Be a responisble scraper.
-    time.sleep(5)
+    time.sleep(5*multiplier)
     headers = {'User-Agent': 'Mozilla/5.0'} # (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6'}
     # Firefox on Windows: Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6
     # Firefox on Mac: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36
@@ -38,12 +38,12 @@ def get_html_content(url):
 
     # Get the html from the url
     try:
-        with closing(get(url, stream=True)) as resp:
+        with closing(get(url)) as resp:
             content_type = resp.headers['Content-Type'].lower()
             if is_good_response(resp):
                 return resp.content
             else:
-                # Unable to get the url responce
+                # Unable to get the url response
                 return None
 
     except RequestException as e:
@@ -53,20 +53,37 @@ def get_html_content(url):
 #        ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)
        
 
-def getBikeDetails(htmlContents):
+def getBikeDetails(BikeContent):
     
-    content = htmlContents.find("div", {"class": "content-header"})
-    title = content['h1']
+    content = BeautifulSoup(BikeContent, 'html.parser')
 
-    content = htmlContents.find("span", {"class": "price"})
-    price = content[0]
-    
+    details = content.findAll("tr")
+
+    bikeDetails = {}
+
+    if (details is not None):
+        for i in range(len(details)):
+            
+            key = details[i].contents[1].text
+            value = details[i].contents[3].text
+
+            print ("{0}: {1}".format(key,value))
+
+            # if key = Bike Facts, value = true
+
+            # for numbers; value = re.sub(r'[^\d.]','',value)
+            # key = compression, value = value.split(':')[0].split('±')
+            # if key = contains('Need')	or 'Bike Payment' or 'Bike Facts' or 'phone'; ignore the feature
+
+            bikeDetails[key] = value
+
+    return bikeDetails
 
 
 
 if __name__ == '__main__':
     '''
-    Extraxt data for the sale of motor bikes.
+    Extract data for the sale of motor bikes.
     '''
 
     baseUrl = 'https://www.bikesales.com.au'
@@ -76,6 +93,7 @@ if __name__ == '__main__':
     pagelimit = 50
     offset = index* pagelimit
     bikeSales = {}
+    multiplier = 1
 
     #roadBikeURL = baseUrl+'road/photots_only/'
     #url = roadBikeURL+extension
@@ -90,21 +108,22 @@ if __name__ == '__main__':
     BikeList = html.findAll("a", {"class": "item-link-container"})
     # Go to bike URL to get the details
 
-    bikesPerPage = len(BikeList)
+    bikesPerPage = 5 #len(BikeList)
     for loopindex in range(bikesPerPage):
         individualBikeURL = BikeList[loopindex].attrs['href']
         BikeContent = get_html_content(baseUrl+individualBikeURL)
-
-        # occaissionally the connection is lost, so try again.
+        
+        ## occaissionally the connection is lost, so try again.
         while (BikeContent == None):
-            BikeContent = get_html_content(baseUrl+individualBikeURL)
-            # Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
+            multiplier *= 2
+            BikeContent = get_html_content(baseUrl+individualBikeURL,multiplier)
+        ## Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
 
-        # connection time out error after a few iterations
-        #getBikeDetails(BikeContent)
+        ## connection time out error after a few iterations
+        bikeDetails = getBikeDetails(BikeContent)
 
         #getBikeDetails
-        content = BeautifulSoup(BikeContent, 'html.parser')
+        #content = BeautifulSoup(BikeContent, 'html.parser')
 
 
         #Photos:
@@ -112,26 +131,28 @@ if __name__ == '__main__':
         #Multiple list of photos
         #content.find("ul", {"class": "thumbnails jcarousel-list jcarousel-list-horizontal"})
 
-        details = content.findAll("tr")
+        #details = content.findAll("tr")
 
-        bikeDetails = {}
+        #bikeDetails = {}
 
-        if (details is not None):
-            for i in range(len(details)):
+        #if (details is not None):
+        #    for i in range(len(details)):
             
-                key = details[i].contents[1].text
-                value = details[i].contents[3].text
+        #        key = details[i].contents[1].text
+        #        value = details[i].contents[3].text
 
-                print ("{0}: {1}".format(key,value))
-                # clean extranious characters from values, eg Price, Odometer, capacity
+        #        print ("{0}: {1}".format(key,value))
+        #        # clean extranious characters from values, eg Price, Odometer, capacity
 
-                # if key = Bike Facts, value = true
-                # if key = compression ratio, clean the value of +- error
-                # potentially clean extra detail in value.
+        #        # if key = Bike Facts, value = true
+        #        # if key = compression ratio, clean the value of +- error
+        #        # potentially clean extra detail in value.
 
-                bikeDetails[key] = value
+        #        bikeDetails[key] = value
 
-            bikeSales[bikeDetails['Ref Code']] = {**bikeDetails}
+        #    bikeSales[bikeDetails['Ref Code']] = {**bikeDetails}
+
+        bikeSales[bikeDetails['Ref Code']] = {**bikeDetails}
 
     df = pd.DataFrame.from_dict(bikeSales, orient='index')
     df.to_csv('bikeSales.csv', index=False)
