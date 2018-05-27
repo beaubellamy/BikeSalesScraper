@@ -147,11 +147,12 @@ if __name__ == '__main__':
     html = BeautifulSoup(content, 'html.parser')    
     numberOfBikes = html.find("span", {"class": "home-page__stock-counter__count"}).text
     numberOfBikes = float(re.sub(r"[^\d.]","",numberOfBikes))
-    pagelimit = 50
+    pagelimit = 10
     bikeSales = {}
 
     numberOfPages = math.ceil(numberOfBikes/pagelimit)
-
+   
+    
     # loop over each page
     for page in range(2):
         #page = 0
@@ -160,8 +161,7 @@ if __name__ == '__main__':
         #https://www.bikesales.com.au/bikes/?Q=%28Service%3D%5BBikesales%5D%26%28%28%28%28SiloType%3D%5BBrand%20new%20bikes%20available%5D%7CSiloType%3D%5BBrand%20new%20bikes%20in%20stock%5D%29%7CSiloType%3D%5BDealer%20used%20bikes%5D%29%7CSiloType%3D%5BDemo%20%26%20near%20new%20bikes%5D%29%7CSiloType%3D%5BPrivate%20used%20bikes%5D%29%29&Sort=Premium&Offset=45&Limit=15&SearchAction=Pagination
         #
         offset = page* pagelimit
-        bikeSales = {}
-    
+        
         #roadBikeURL = baseUrl+'road/photots_only/'
         #url = roadBikeURL+extension
         url = baseUrl+'/bikes/?Q=%28Service%3D%5BBikesales%5D%26%28%28%28%28SiloType%3D%5BBrand%20new%20bikes%20available%5D%7CSiloType%3D%5BBrand%20new%20bikes%20in%20stock%5D%29%7CSiloType%3D%5BDealer%20used%20bikes%5D%29%7CSiloType%3D%5BDemo%20%26%20near%20new%20bikes%5D%29%7CSiloType%3D%5BPrivate%20used%20bikes%5D%29%29&Sort=Premium&Offset='+str(offset)+'&Limit='+str(pagelimit)+'&SearchAction=Pagination'
@@ -201,9 +201,9 @@ if __name__ == '__main__':
             print ("{0}: {1}".format(str(loopindex+pagelimit*page), baseUrl+individualBikeURL))
             scrapeDate = datetime.utcnow().strftime("%d-%m-%Y %H:%M")
         
-            bikeSales[bikeDetails['Ref Code']].update({"URL": baseUrl+individualBikeURL,
+            bikeSales[bikeDetails['Ref Code']] = {"URL": baseUrl+individualBikeURL,
                                                        **bikeDetails,
-                                                       "Scraped date": scrapeDate})
+                                                       "Scraped date": scrapeDate}
 
     bikeDataFrame = pd.DataFrame.from_dict(bikeSales, orient='index')
     
