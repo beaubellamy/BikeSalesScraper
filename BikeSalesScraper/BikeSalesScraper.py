@@ -29,16 +29,11 @@ def get_html_content(url, multiplier=1):
     Retrieve the contents of the url.
     """
     # Be a responisble scraper.
+    # The multiplier is used to exponentially increase the delay when there are several attempts at connecting to the url
     time.sleep(2*multiplier)
-    headers = {'User-Agent': 'Mozilla/5.0'} # (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6'}
-    # Firefox on Windows: Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.8.1.6) Gecko/20070725 Firefox/2.0.0.6
-    # Firefox on Mac: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36
-    # Chrome on Linux: Mozilla/5.0 (X11; U; Linux i686; en-US) AppleWebKit/534.3 (KHTML, like Gecko) Chrome/6.0.472.63 Safari/534.3
-    # IE on Vista: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)
-
-
-
-
+    # Declare the browser that is attempting to access the url.
+    headers = {'User-Agent': 'Chrome on Windows: Chrome 66.0.3359.181'}
+    
     # Get the html from the url
     try:
         with closing(get(url)) as resp:
@@ -51,6 +46,8 @@ def get_html_content(url, multiplier=1):
 
     except RequestException as e:
         print("Error during requests to {0} : {1}".format(url, str(e)))
+        # Error messages recieved. I should be catching these and properly dealing with them. 
+        # I'm not sure how to deal with them properly though.
 #        ConnectionError(ProtocolError('Connection aborted.', RemoteDisconnected('Remote end closed connection without response',)),)
 #        ConnectionError(ProtocolError('Connection aborted.', OSError("(10060, 'WSAETIMEDOUT')",)),)
 #        ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None)
@@ -71,8 +68,10 @@ def getBikeDetails(BikeContent):
     bikeDetails = {}
 
     if (details is not None):
+        # Loop through all the possible features
         for i in range(len(details)):
             
+            # Extract the key and values for each feature.
             key = details[i].contents[1].text
             value = details[i].contents[3].text
             
@@ -86,9 +85,11 @@ def getBikeDetails(BikeContent):
                           "Primary Drive", "Spark Plug Description", "Ignition Description", 
                           "Economy Mode", "Weight Distribution Front/Rear"]
  
+            # Get the numbers out.
             if (re.sub(r"[^\d.]","",value) != '' and key not in leaveAsText):
                 value = re.sub(r"[^\d.]","",value)
            
+            # Process the drive ratio values
             if (key == "Final Drive Ratio"):
                 if ("/" in value):
                     temp = value.split("/")
@@ -101,15 +102,19 @@ def getBikeDetails(BikeContent):
                     except ValueError:
                         continue
 
+            # Process the compression ratio
             if (key == "Compression Ratio"):
                value = float(value.split(':')[0].split('±')[0])
-            
+
+            # Configure the exhaust configuration and force text interpretation in csv file
             if (key == "Exhaust Config"):
                value = "'"+re.sub(":","-",value)
             
+            # Convert the modified date to a datetime object.
             if (key == "Last Modified Date"):
                 value = datetime.strptime(value,"%d%m%Y")
 
+            # Extract the months left on registration
             if (key == "Reg Expiry"):
                 if ("Month" in value):
                     value = int(value.split("Month")[0])
@@ -123,15 +128,11 @@ def getBikeDetails(BikeContent):
                         value = int(math.ceil(deltaDays/30))
                 else:
                     continue
-
-                    
-
+    
+            # Ignore these features as they dont/wont provide any information
             if ('Need' not in key and key != "Bike Payment" and key != "Bike Facts" and key != "phone"):
                 bikeDetails[key] = value
-                # Ignore the listed features
 
-
-            #print ("{0}: {1}".format(key,value))
 
     return bikeDetails
 
@@ -142,69 +143,78 @@ if __name__ == '__main__':
     Extract data for the sale of motor bikes.
     '''
 
+    # Set the base url and extract basic information required for cycling through the website.
     baseUrl = 'https://www.bikesales.com.au'
     content = get_html_content(baseUrl)
     html = BeautifulSoup(content, 'html.parser')    
     numberOfBikes = html.find("span", {"class": "home-page__stock-counter__count"}).text
     numberOfBikes = float(re.sub(r"[^\d.]","",numberOfBikes))
-    pagelimit = 10
-    bikeSales = {}
-
+    # Set the number of bikes shown on a single page
+    pagelimit = 50
+    # Calculate the number of pages to cycle through.
     numberOfPages = math.ceil(numberOfBikes/pagelimit)
    
+    # Create an empty dictionary for the bike sales data
+    bikeSales = {}
+
+    
     
     # loop over each page
-    for page in range(2):
-        #page = 0
-        #https://www.bikesales.com.au/bikes/?Q=%28Service%3D%5BBikesales%5D%26%28%28%28%28SiloType%3D%5BBrand%20new%20bikes%20available%5D%7CSiloType%3D%5BBrand%20new%20bikes%20in%20stock%5D%29%7CSiloType%3D%5BDealer%20used%20bikes%5D%29%7CSiloType%3D%5BDemo%20%26%20near%20new%20bikes%5D%29%7CSiloType%3D%5BPrivate%20used%20bikes%5D%29%29&Sort=Premium&Offset=15&Limit=15&SearchAction=Pagination
-        #https://www.bikesales.com.au/bikes/?Q=%28Service%3D%5BBikesales%5D%26%28%28%28%28SiloType%3D%5BBrand%20new%20bikes%20available%5D%7CSiloType%3D%5BBrand%20new%20bikes%20in%20stock%5D%29%7CSiloType%3D%5BDealer%20used%20bikes%5D%29%7CSiloType%3D%5BDemo%20%26%20near%20new%20bikes%5D%29%7CSiloType%3D%5BPrivate%20used%20bikes%5D%29%29&Sort=Premium&Offset=30&Limit=15&SearchAction=Pagination
-        #https://www.bikesales.com.au/bikes/?Q=%28Service%3D%5BBikesales%5D%26%28%28%28%28SiloType%3D%5BBrand%20new%20bikes%20available%5D%7CSiloType%3D%5BBrand%20new%20bikes%20in%20stock%5D%29%7CSiloType%3D%5BDealer%20used%20bikes%5D%29%7CSiloType%3D%5BDemo%20%26%20near%20new%20bikes%5D%29%7CSiloType%3D%5BPrivate%20used%20bikes%5D%29%29&Sort=Premium&Offset=45&Limit=15&SearchAction=Pagination
-        #
+    for page in range(numberOfPages):
+        
+        # Calcaulte the offset for each page display.
         offset = page* pagelimit
         
-        #roadBikeURL = baseUrl+'road/photots_only/'
-        #url = roadBikeURL+extension
-        url = baseUrl+'/bikes/?Q=%28Service%3D%5BBikesales%5D%26%28%28%28%28SiloType%3D%5BBrand%20new%20bikes%20available%5D%7CSiloType%3D%5BBrand%20new%20bikes%20in%20stock%5D%29%7CSiloType%3D%5BDealer%20used%20bikes%5D%29%7CSiloType%3D%5BDemo%20%26%20near%20new%20bikes%5D%29%7CSiloType%3D%5BPrivate%20used%20bikes%5D%29%29&Sort=Premium&Offset='+str(offset)+'&Limit='+str(pagelimit)+'&SearchAction=Pagination'
+        # Add in the extension to generalise the search url
+        url = baseUrl+'/bikes/?Q=%28Service%3D%5BBikesales%5D%26%28%28%28%28SiloType%3D%5BBrand%20new%20bikes%20available'+ \
+                '%5D%7CSiloType%3D%5BBrand%20new%20bikes%20in%20stock%5D%29%7CSiloType%3D%5BDealer%20used%20bikes'+ \
+                '%5D%29%7CSiloType%3D%5BDemo%20%26%20near%20new%20bikes%5D%29%7CSiloType%3D%5BPrivate%20used%20bikes%5D%29%29&'+ \
+                'Sort=Premium&Offset='+str(offset)+'&Limit='+str(pagelimit)+'&SearchAction=Pagination'
 
-        #Search page
+        # Search the current page and Get a list of all bikes on the current page
         content = get_html_content(url)
-
-        # Get a list of all ski resorts (go through each page)
         html = BeautifulSoup(content, 'html.parser')
-
         BikeList = html.findAll("a", {"class": "item-link-container"})
-        # Go to bike URL to get the details
+        
+        # convert loop to for bikes in BikeList:
+        # need to figure out what this means for loopindex in the loop.
 
+        # Loop through each bike in the list.
         bikesPerPage = len(BikeList)
         for loopindex in range(bikesPerPage):
+
+            # Get the URL for each bike.
             individualBikeURL = BikeList[loopindex].attrs['href']
             BikeContent = get_html_content(baseUrl+individualBikeURL)
-            # reset the miltipler for each new url
+            
+            # Reset the miltipler for each new url
             multiplier = 1
-            urlDenialCount = 0
+            #urlDenialCount = 0
 
             ## occasionally the connection is lost, so try again.
+            ## Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
+            
+            # If initial attempt to connect to the url was unsuccessful, try again with an increasing delay
             while (BikeContent == None):
-                urlDenialCount += 1
+                # Limit the exponential delay to 16x
                 if (multiplier < 16):
                     multiplier *= 2
                 BikeContent = get_html_content(baseUrl+individualBikeURL,multiplier)
-            ## Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
-
-            ## connection time out error after a few iterations
+            
+            # Extract the data for each bike into a dictionary
             bikeDetails = getBikeDetails(BikeContent)
 
-            #getBikeDetails
-            #content = BeautifulSoup(BikeContent, 'html.parser')
-
-
             print ("{0}: {1}".format(str(loopindex+pagelimit*page), baseUrl+individualBikeURL))
-            scrapeDate = datetime.utcnow().strftime("%d-%m-%Y %H:%M")
+
+            # Create a date for data extraction (In UTC time)
+            scrapeDate = datetime.utcnow().datetime() #.strftime("%d-%m-%Y %H:%M")
         
+            # Populate the bike sales details for each bike
             bikeSales[bikeDetails['Ref Code']] = {"URL": baseUrl+individualBikeURL,
                                                        **bikeDetails,
                                                        "Scraped date": scrapeDate}
 
+    # Convert the dictionary to a pandas dataframe
     bikeDataFrame = pd.DataFrame.from_dict(bikeSales, orient='index')
     
     # Convert learner approved feature into boolean values
@@ -212,4 +222,5 @@ if __name__ == '__main__':
     # Create a seller feature, this assumes that if there is a stock number, the seller is a dealer.
     bikeDataFrame["Seller"] = ["Private" if pd.isnull(a) else "Dealer" for a in bikeDataFrame['Stock Number']]
 
-    bikeDataFrame.to_csv('bikeSales.csv', index=False)
+    # Write the dataframe to a csv file.
+    bikeDataFrame.to_csv('bikeSales-'+str(scrapeDate)+'.csv', index=False)
