@@ -54,7 +54,10 @@ def get_html_content(url, multiplier=1):
        
 
 def getBikeDetails(BikeContent):
-    
+    """
+    Search the for the relevant Bike information.
+    """
+
     content = BeautifulSoup(BikeContent, "html.parser")
 
     # Photos:
@@ -139,12 +142,13 @@ def getBikeDetails(BikeContent):
 
 
 if __name__ == '__main__':
-    '''
+    """
     Extract data for the sale of motor bikes.
-    '''
+    """
 
     # Set the base url and extract basic information required for cycling through the website.
     baseUrl = 'https://www.bikesales.com.au'
+
     content = get_html_content(baseUrl)
     html = BeautifulSoup(content, 'html.parser')    
     numberOfBikes = html.find("span", {"class": "home-page__stock-counter__count"}).text
@@ -156,7 +160,6 @@ if __name__ == '__main__':
    
     # Create an empty dictionary for the bike sales data
     bikeSales = {}
-
     
     
     # loop over each page
@@ -176,21 +179,16 @@ if __name__ == '__main__':
         html = BeautifulSoup(content, 'html.parser')
         BikeList = html.findAll("a", {"class": "item-link-container"})
         
-        # convert loop to for bikes in BikeList:
-        # need to figure out what this means for loopindex in the loop.
-
-        # Loop through each bike in the list.
-        bikesPerPage = len(BikeList)
-        for loopindex in range(bikesPerPage):
+        # Cycle through the list of bikes on each search page.
+        for bike in BikeList:
 
             # Get the URL for each bike.
-            individualBikeURL = BikeList[loopindex].attrs['href']
+            individualBikeURL = bike.attrs['href']
             BikeContent = get_html_content(baseUrl+individualBikeURL)
             
             # Reset the miltipler for each new url
             multiplier = 1
-            #urlDenialCount = 0
-
+            
             ## occasionally the connection is lost, so try again.
             ## Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
             
@@ -204,15 +202,13 @@ if __name__ == '__main__':
             # Extract the data for each bike into a dictionary
             bikeDetails = getBikeDetails(BikeContent)
 
-            print ("{0}: {1}".format(str(loopindex+pagelimit*page), baseUrl+individualBikeURL))
-
             # Create a date for data extraction (In UTC time)
-            scrapeDate = datetime.utcnow().datetime() #.strftime("%d-%m-%Y %H:%M")
+            scrapeDate = datetime.utcnow().date()
         
             # Populate the bike sales details for each bike
-            bikeSales[bikeDetails['Ref Code']] = {"URL": baseUrl+individualBikeURL,
-                                                       **bikeDetails,
-                                                       "Scraped date": scrapeDate}
+            bikeSales[bikeDetails['Ref Code']] = {"URL": baseUrl+individualBikeURL, 
+                                                  **bikeDetails, 
+                                                  "Scraped date": scrapeDate}
 
     # Convert the dictionary to a pandas dataframe
     bikeDataFrame = pd.DataFrame.from_dict(bikeSales, orient='index')
