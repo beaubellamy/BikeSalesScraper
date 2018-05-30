@@ -11,8 +11,14 @@ import re
 from datetime import datetime
 import time
 
+import itertools
+import collections.abc
+
+import requests.exceptions
+
+
 # helpful insight
-#https://stackoverflow.com/questions/33718932/missing-data-when-scraping-website-using-loop?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
+# https://stackoverflow.com/questions/33718932/missing-data-when-scraping-website-using-loop?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 # https://stackoverflow.com/questions/9446387/how-to-retry-urllib2-request-when-fails
 
 def is_good_response(resp):
@@ -45,7 +51,7 @@ def get_html_content(url, multiplier=1):
                 return None
 
     except RequestException as e:
-        print("Error during requests to {0} : {1}".format(url, str(e)))
+        print('Error during requests to {0} : {1}'.format(url, str(e)))
         # Error messages recieved. I should be catching these and properly dealing with them. 
         # I'm not sure how to deal with them properly though.
 #        ConnectionError(ProtocolError('Connection aborted.', RemoteDisconnected('Remote end closed connection without response',)),)
@@ -58,15 +64,15 @@ def getBikeDetails(BikeContent):
     Search the for the relevant Bike information.
     """
 
-    content = BeautifulSoup(BikeContent, "html.parser")
+    content = BeautifulSoup(BikeContent, 'html.parser')
 
     # Photos:
-    # content.find("a", {"class": "main-image-link"})
+    # content.find('a', {'class': 'main-image-link'})
     # Multiple list of photos
-    # content.find("ul", {"class": "thumbnails jcarousel-list jcarousel-list-horizontal"})
+    # content.find('ul', {'class': 'thumbnails jcarousel-list jcarousel-list-horizontal'})
 
 
-    details = content.findAll("tr")
+    details = content.findAll('tr')
 
     bikeDetails = {}
 
@@ -79,26 +85,26 @@ def getBikeDetails(BikeContent):
             value = details[i].contents[3].text
             
             # Extract numbers from all features that have one, except:
-            leaveAsText = ["Bike", "Body", "Configuration", "Reg Plate", "Reg Expiry", "Ref Code", "Stock Number",
-                          "Engine Description", "Compression Ratio", "Battery Description", "Wheel Type",
-                          "Wheel Size Front", "Wheel Size Rear", "Rear Tyre", "Front Tyre", "Seat Description",
-                          "Carburettor", "Exhaust Description", "Transmission Description", "Clutch Type",
-                          "Chassis Description", "Front Suspension", "Rear Suspension", "Front Brake Description",
-                          "Rear Brake Description", "Instruments / Dash Description", "Exhaust Config",
-                          "Primary Drive", "Spark Plug Description", "Ignition Description", 
-                          "Economy Mode", "Weight Distribution Front/Rear"]
+            leaveAsText = ['Bike', 'Body', 'Configuration', 'Reg Plate', 'Reg Expiry', 'Ref Code', 'Stock Number',
+                          'Engine Description', 'Compression Ratio', 'Battery Description', 'Wheel Type',
+                          'Wheel Size Front', 'Wheel Size Rear', 'Rear Tyre', 'Front Tyre', 'Seat Description',
+                          'Carburettor', 'Exhaust Description', 'Transmission Description', 'Clutch Type',
+                          'Chassis Description', 'Front Suspension', 'Rear Suspension', 'Front Brake Description',
+                          'Rear Brake Description', 'Instruments / Dash Description', 'Exhaust Config',
+                          'Primary Drive', 'Spark Plug Description', 'Ignition Description', 
+                          'Economy Mode', 'Weight Distribution Front/Rear']
  
             # Get the numbers out.
-            if (re.sub(r"[^\d.]","",value) != '' and key not in leaveAsText):
-                value = re.sub(r"[^\d.]","",value)
+            if (re.sub(r'[^\d.]','',value) != '' and key not in leaveAsText):
+                value = re.sub(r'[^\d.]','',value)
            
             # Process the drive ratio values
-            if (key == "Final Drive Ratio"):
-                if ("/" in value):
-                    temp = value.split("/")
+            if (key == 'Final Drive Ratio'):
+                if ('/' in value):
+                    temp = value.split('/')
                     value = float(temp[0])/float(temp[1])
-                elif (":" in value):
-                    value = float(value.split(":")[0])
+                elif (':' in value):
+                    value = float(value.split(':')[0])
                 else:
                     try:
                         value = float(value)
@@ -106,22 +112,22 @@ def getBikeDetails(BikeContent):
                         continue
 
             # Process the compression ratio
-            if (key == "Compression Ratio"):
+            if (key == 'Compression Ratio'):
                value = float(value.split(':')[0].split('±')[0])
 
             # Configure the exhaust configuration and force text interpretation in csv file
-            if (key == "Exhaust Config"):
-               value = "'"+re.sub(":","-",value)
+            if (key == 'Exhaust Config'):
+               value = "'"+re.sub(':','-',value)
             
             # Convert the modified date to a datetime object.
-            if (key == "Last Modified Date"):
-                value = datetime.strptime(value,"%d%m%Y")
+            if (key == 'Last Modified Date'):
+                value = datetime.strptime(value,'%d%m%Y')
 
             # Extract the months left on registration
-            if (key == "Reg Expiry"):
-                if ("Month" in value):
-                    value = int(value.split("Month")[0])
-                elif (value != ""):
+            if (key == 'Reg Expiry'):
+                if ('Month' in value):
+                    value = int(value.split('Month')[0])
+                elif (value != ''):
                     expiry = datetime.strptime(value, '%B %Y')
                     today = datetime.today()
                     deltaDays = (expiry-today).days
@@ -133,12 +139,60 @@ def getBikeDetails(BikeContent):
                     continue
     
             # Ignore these features as they dont/wont provide any information
-            if ('Need' not in key and key != "Bike Payment" and key != "Bike Facts" and key != "phone"):
+            if ('Need' not in key and key != 'Bike Payment' and key != 'Bike Facts' and key != 'phone'):
                 bikeDetails[key] = value
 
 
     return bikeDetails
 
+def request(method, retry=None, *args, **kwargs):
+    if retry is None:
+        retry = iter()
+    elif retry == -1:
+        retry = (2**i for i in itertools.count())
+    elif isinstance(retry, int):
+        retry = (2**i for i in range(retry))
+    elif isinstance(retry, collections.abc.Iterable):
+        pass
+    else:
+        raise ValueError('Unknown retry {retry}'.format(retry=retry))
+
+    for sleep in itertools.chain([0], retry):
+        if sleep:
+            time.sleep(sleep)
+        try:
+            resp = method(*args, **kwargs)
+            if 200 <= resp.status_code < 300:
+                print ('Success: '+args[0])
+                return resp.content
+        except requests.exceptions.RequestException as e:
+            print('Error during requests to {0} : {1}'.format(args[0], str(e)))
+    return None
+
+
+def bike_retrys():
+    for i in range(5):
+        yield 2**i
+    while True:
+        yield 16
+
+#def get_bike(url):
+#    multiplier = 1
+#    while (BikeContent == None):
+#        time.sleep(2*multiplier)
+#        try:
+#            with closing(get(url)) as resp:
+#                content_type = resp.headers['Content-Type'].lower()
+#                if 200 <= resp.status_code < 300:
+#                    return resp.content
+#        except RequestException as e:
+#            print('Error during requests to {0} : {1}'.format(url, str(e)))
+#        if (multiplier < 16):
+#            multiplier *= 2
+#    return None
+
+def get_bike(*args, **kwargs):
+    return request(requests.get, bike_retrys(), *args, **kwargs)
 
 
 if __name__ == '__main__':
@@ -151,10 +205,10 @@ if __name__ == '__main__':
 
     content = get_html_content(baseUrl)
     html = BeautifulSoup(content, 'html.parser')    
-    numberOfBikes = html.find("span", {"class": "home-page__stock-counter__count"}).text
-    numberOfBikes = float(re.sub(r"[^\d.]","",numberOfBikes))
+    numberOfBikes = html.find('span', {'class': 'home-page__stock-counter__count'}).text
+    numberOfBikes = float(re.sub(r'[^\d.]','',numberOfBikes))
     # Set the number of bikes shown on a single page
-    pagelimit = 50
+    pagelimit = 5
     # Calculate the number of pages to cycle through.
     numberOfPages = math.ceil(numberOfBikes/pagelimit)
    
@@ -163,7 +217,7 @@ if __name__ == '__main__':
     
     
     # loop over each page
-    for page in range(numberOfPages):
+    for page in range(1): #numberOfPages):
         
         # Calcaulte the offset for each page display.
         offset = page* pagelimit
@@ -177,27 +231,28 @@ if __name__ == '__main__':
         # Search the current page and Get a list of all bikes on the current page
         content = get_html_content(url)
         html = BeautifulSoup(content, 'html.parser')
-        BikeList = html.findAll("a", {"class": "item-link-container"})
+        BikeList = html.findAll('a', {'class': 'item-link-container'})
         
         # Cycle through the list of bikes on each search page.
         for bike in BikeList:
 
             # Get the URL for each bike.
             individualBikeURL = bike.attrs['href']
-            BikeContent = get_html_content(baseUrl+individualBikeURL)
-            
+            #BikeContent = get_html_content(baseUrl+individualBikeURL)
+            BikeContent = get_bike(baseUrl+individualBikeURL)
+
             # Reset the miltipler for each new url
-            multiplier = 1
+            #multiplier = 1
             
-            ## occasionally the connection is lost, so try again.
-            ## Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
+            ### occasionally the connection is lost, so try again.
+            ### Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
             
-            # If initial attempt to connect to the url was unsuccessful, try again with an increasing delay
-            while (BikeContent == None):
-                # Limit the exponential delay to 16x
-                if (multiplier < 16):
-                    multiplier *= 2
-                BikeContent = get_html_content(baseUrl+individualBikeURL,multiplier)
+            ## If initial attempt to connect to the url was unsuccessful, try again with an increasing delay
+            #while (BikeContent == None):
+            #    # Limit the exponential delay to 16x
+            #    if (multiplier < 16):
+            #        multiplier *= 2
+            #    BikeContent = get_html_content(baseUrl+individualBikeURL,multiplier)
             
             # Extract the data for each bike into a dictionary
             bikeDetails = getBikeDetails(BikeContent)
@@ -206,17 +261,17 @@ if __name__ == '__main__':
             scrapeDate = datetime.utcnow().date()
         
             # Populate the bike sales details for each bike
-            bikeSales[bikeDetails['Ref Code']] = {"URL": baseUrl+individualBikeURL, 
+            bikeSales[bikeDetails['Ref Code']] = {'URL': baseUrl+individualBikeURL, 
                                                   **bikeDetails, 
-                                                  "Scraped date": scrapeDate}
+                                                  'Scraped date': scrapeDate}
 
     # Convert the dictionary to a pandas dataframe
     bikeDataFrame = pd.DataFrame.from_dict(bikeSales, orient='index')
     
     # Convert learner approved feature into boolean values
-    bikeDataFrame["Learner Approved"] = [False if pd.isnull(a) else True for a in bikeDataFrame['Learner Approved']]
+    bikeDataFrame['Learner Approved'] = [False if pd.isnull(a) else True for a in bikeDataFrame['Learner Approved']]
     # Create a seller feature, this assumes that if there is a stock number, the seller is a dealer.
-    bikeDataFrame["Seller"] = ["Private" if pd.isnull(a) else "Dealer" for a in bikeDataFrame['Stock Number']]
+    bikeDataFrame['Seller'] = ['Private' if pd.isnull(a) else 'Dealer' for a in bikeDataFrame['Stock Number']]
 
     # Write the dataframe to a csv file.
     bikeDataFrame.to_csv('bikeSales-'+str(scrapeDate)+'.csv', index=False)
