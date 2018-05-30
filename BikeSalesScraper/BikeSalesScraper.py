@@ -269,9 +269,16 @@ if __name__ == '__main__':
     bikeDataFrame = pd.DataFrame.from_dict(bikeSales, orient='index')
     
     # Convert learner approved feature into boolean values
-    bikeDataFrame['Learner Approved'] = [False if pd.isnull(a) else True for a in bikeDataFrame['Learner Approved']]
+    if ('Learner Approved' in bikeDataFrame):
+        bikeDataFrame['Learner Approved'] = [False if pd.isnull(a) else True for a in bikeDataFrame['Learner Approved']]
+    else:
+        bikeDataFrame['Learner Approved'] = False
+
     # Create a seller feature, this assumes that if there is a stock number, the seller is a dealer.
-    bikeDataFrame['Seller'] = ['Private' if pd.isnull(a) else 'Dealer' for a in bikeDataFrame['Stock Number']]
+    if ('Stock Number' in bikeDataFrame):
+        bikeDataFrame['Seller'] = ['Private' if pd.isnull(a) else 'Dealer' for a in bikeDataFrame['Stock Number']]
+    else:
+        bikeDataFrame['Seller'] = 'Private'
 
     # Write the dataframe to a csv file.
     bikeDataFrame.to_csv('bikeSales-'+str(scrapeDate)+'.csv', index=False)
