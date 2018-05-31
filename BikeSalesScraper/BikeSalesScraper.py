@@ -10,7 +10,7 @@ from fractions import Fraction
 import re
 from datetime import datetime
 import time
-
+from random import choice
 import itertools
 import collections.abc
 
@@ -20,6 +20,21 @@ import requests.exceptions
 # helpful insight
 # https://stackoverflow.com/questions/33718932/missing-data-when-scraping-website-using-loop?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 # https://stackoverflow.com/questions/9446387/how-to-retry-urllib2-request-when-fails
+
+desktop_agents = ['Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
+                      'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
+                      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
+                      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/602.2.14 (KHTML, like Gecko) Version/10.0.1 Safari/602.2.14',
+                      'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36',
+                      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.98 Safari/537.36',
+                      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.98 Safari/537.36',
+                      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36',
+                      'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36',
+                      'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
+                      'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0']
+headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'}
+agent = {'User-Agent': choice(desktop_agents)}
+
 
 def is_good_response(resp):
     """
@@ -37,12 +52,15 @@ def get_html_content(url, multiplier=1):
     # Be a responisble scraper.
     # The multiplier is used to exponentially increase the delay when there are several attempts at connecting to the url
     time.sleep(2*multiplier)
+
+    
     # Declare the browser that is attempting to access the url.
-    headers = {'User-Agent': 'Chrome on Windows: Chrome 66.0.3359.181'}
+    #headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'}
     
     # Get the html from the url
     try:
-        with closing(get(url)) as resp:
+        #with closing(get(url,{'User-Agent': choice(desktop_agents)})) as resp:
+        with closing(get(url,headers=agent)) as resp:
             content_type = resp.headers['Content-Type'].lower()
             if is_good_response(resp):
                 return resp.content
@@ -171,10 +189,10 @@ def request(method, retry=None, *args, **kwargs):
 
 
 def bike_retrys():
-    for i in range(5):
+    for i in range(6):
         yield 2**i
     while True:
-        yield 16
+        yield 32
 
 #def get_bike(url):
 #    multiplier = 1
@@ -208,7 +226,7 @@ if __name__ == '__main__':
     numberOfBikes = html.find('span', {'class': 'home-page__stock-counter__count'}).text
     numberOfBikes = float(re.sub(r'[^\d.]','',numberOfBikes))
     # Set the number of bikes shown on a single page
-    pagelimit = 5
+    pagelimit = 100
     # Calculate the number of pages to cycle through.
     numberOfPages = math.ceil(numberOfBikes/pagelimit)
    
@@ -217,7 +235,7 @@ if __name__ == '__main__':
     
     
     # loop over each page
-    for page in range(1): #numberOfPages):
+    for page in range(numberOfPages):
         
         # Calcaulte the offset for each page display.
         offset = page* pagelimit
@@ -238,8 +256,7 @@ if __name__ == '__main__':
 
             # Get the URL for each bike.
             individualBikeURL = bike.attrs['href']
-            #BikeContent = get_html_content(baseUrl+individualBikeURL)
-            BikeContent = get_bike(baseUrl+individualBikeURL)
+            BikeContent = get_bike(baseUrl+individualBikeURL,headers=agent) #{'User-Agent': choice(desktop_agents)})
 
             # Reset the miltipler for each new url
             #multiplier = 1
