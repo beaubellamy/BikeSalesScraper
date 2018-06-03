@@ -13,55 +13,91 @@ import time
 from random import choice
 import itertools
 import collections.abc
-
+from lxml.html import fromstring
+from itertools import cycle
+import traceback
 import requests.exceptions
-
+import os
+import warnings
 
 # helpful insight
 # https://stackoverflow.com/questions/33718932/missing-data-when-scraping-website-using-loop?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 # https://stackoverflow.com/questions/9446387/how-to-retry-urllib2-request-when-fails
 
-desktop_agents = ['Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
-                      'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
-                      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
-                      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/602.2.14 (KHTML, like Gecko) Version/10.0.1 Safari/602.2.14',
-                      'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36',
-                      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.98 Safari/537.36',
-                      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.98 Safari/537.36',
-                      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36',
-                      'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36',
-                      'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36',
-                      'Mozilla/5.0 (Windows NT 10.0; WOW64; rv:50.0) Gecko/20100101 Firefox/50.0']
-headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'}
-agent = {'User-Agent': choice(desktop_agents)}
+default_agent = ['Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36']
+
+# Havent confirmed this works yet.
+def get_proxies():
+    """
+    Extract a list of free proxies that can be used avoid the 
+    scraper code being detected.
+    """
+
+    url = 'https://free-proxy-list.net/'
+    response = get(url)
+    parser = fromstring(response.text)
+    proxies = set()
+
+    # Configure the proxy list
+    for i in parser.xpath('//tbody/tr'):
+        if i.xpath('.//td[7][contains(text(),"yes")]'):
+            proxy = ":".join([i.xpath('.//td[1]/text()')[0], i.xpath('.//td[2]/text()')[0]])
+            proxies.add(proxy)
+    return proxies
+
+
+def get_user_agents():
+    """
+    Read three files, which contain a list of possible user-agents to assist 
+    in avoiding detection of the scraping code.
+    """
+
+    with open('Chrome.txt', 'r') as file:
+        user_agents = [line.rstrip('\n') for line in file]
+
+    with open('Firefox.txt', 'r') as file:
+        user_agents.extend([line.rstrip('\n') for line in file])
+
+    with open('Safari.txt', 'r') as file:
+        user_agents.extend([line.rstrip('\n') for line in file])
+
+    # Return the full list of possible user agents
+    return user_agents
 
 
 def is_good_response(resp):
     """
-    Ensures that the response is a html.
+    Ensures that the response is a html object.
     """
     content_type = resp.headers['Content-Type'].lower()
     return (resp.status_code == 200 and 
             content_type is not None 
             and content_type.find('html') > -1)
 
-def get_html_content(url, multiplier=1):
+def get_html_content(url, multiplier=1,user_agents=default_agent,proxy_pool=set()):
     """
-    Retrieve the contents of the url.
+    Retrieve the contents of the url, using the proxy and user 
+    agent to help avoid scraper detection.
     """
-    # Be a responisble scraper.
-    # The multiplier is used to exponentially increase the delay when there are several attempts at connecting to the url
-    time.sleep(2*multiplier)
+    if not bool(proxy_pool):
+        print('There are no proxies in the set list')
+        return None
 
-    
-    # Declare the browser that is attempting to access the url.
-    #headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'}
+    # Be a responisble scraper.
+    # The multiplier is used to exponentially increase the delay when 
+    # there are several attempts at connecting to the url
+    time.sleep(5*multiplier)
+
+    #Choose the next proxy in the list
+    proxy = next(proxy_pool)
     
     # Get the html from the url
     try:
-        #with closing(get(url,{'User-Agent': choice(desktop_agents)})) as resp:
-        with closing(get(url,headers=agent)) as resp:
-            content_type = resp.headers['Content-Type'].lower()
+        with closing(get(url,
+                         headers={'User-Agent': choice(agents).rstrip()},
+                         proxies={"http": proxy, "https": proxy})) \
+        as resp:
+            # Check the response status
             if is_good_response(resp):
                 return resp.content
             else:
@@ -79,7 +115,7 @@ def get_html_content(url, multiplier=1):
 
 def getBikeDetails(BikeContent):
     """
-    Search the for the relevant Bike information.
+    Search for the relevant Bike information.
     """
 
     content = BeautifulSoup(BikeContent, 'html.parser')
@@ -88,7 +124,6 @@ def getBikeDetails(BikeContent):
     # content.find('a', {'class': 'main-image-link'})
     # Multiple list of photos
     # content.find('ul', {'class': 'thumbnails jcarousel-list jcarousel-list-horizontal'})
-
 
     details = content.findAll('tr')
 
@@ -163,36 +198,36 @@ def getBikeDetails(BikeContent):
 
     return bikeDetails
 
-def request(method, retry=None, *args, **kwargs):
-    if retry is None:
-        retry = iter()
-    elif retry == -1:
-        retry = (2**i for i in itertools.count())
-    elif isinstance(retry, int):
-        retry = (2**i for i in range(retry))
-    elif isinstance(retry, collections.abc.Iterable):
-        pass
-    else:
-        raise ValueError('Unknown retry {retry}'.format(retry=retry))
+#def request(method, retry=None, *args, **kwargs):
+#    if retry is None:
+#        retry = iter()
+#    elif retry == -1:
+#        retry = (2**i for i in itertools.count())
+#    elif isinstance(retry, int):
+#        retry = (2**i for i in range(retry))
+#    elif isinstance(retry, collections.abc.Iterable):
+#        pass
+#    else:
+#        raise ValueError('Unknown retry {retry}'.format(retry=retry))
 
-    for sleep in itertools.chain([0], retry):
-        if sleep:
-            time.sleep(sleep)
-        try:
-            resp = method(*args, **kwargs)
-            if 200 <= resp.status_code < 300:
-                print ('Success: '+args[0])
-                return resp.content
-        except requests.exceptions.RequestException as e:
-            print('Error during requests to {0} : {1}'.format(args[0], str(e)))
-    return None
+#    for sleep in itertools.chain([0], retry):
+#        if sleep:
+#            time.sleep(sleep)
+#        try:
+#            resp = method(*args, **kwargs)
+#            if 200 <= resp.status_code < 300:
+#                print ('Success: '+args[0])
+#                return resp.content
+#        except requests.exceptions.RequestException as e:
+#            print('Error during requests to {0} : {1}'.format(args[0], str(e)))
+#    return None
 
 
-def bike_retrys():
-    for i in range(6):
-        yield 2**i
-    while True:
-        yield 32
+#def bike_retrys():
+#    for i in range(6):
+#        yield 2**i
+#    while True:
+#        yield 32
 
 #def get_bike(url):
 #    multiplier = 1
@@ -209,33 +244,65 @@ def bike_retrys():
 #            multiplier *= 2
 #    return None
 
-def get_bike(*args, **kwargs):
-    return request(requests.get, bike_retrys(), *args, **kwargs)
+#def get_bike(*args, **kwargs):
+#    return request(requests.get, bike_retrys(), *args, **kwargs)
 
+def appendDFToCSV_void(df, csvFilePath, sep=","):
+    """
+    Append the dataframe to an existing file.
+    
+    This alllows batch processing of the dataframes and 
+    reduces the impact of lost data when there is an error.
+    """
+
+    # Check if the file already exists
+    if not os.path.isfile(csvFilePath):
+        df.to_csv(csvFilePath, mode='a', index=False, sep=sep)
+
+    # Check if the dataframes match before adding to file
+    elif len(df.columns) != len(pd.read_csv(csvFilePath, nrows=1, sep=sep).columns):
+        df.to_csv(csvFilePath+str(datetime.utcnow().time()), mode='a', index=False, sep=sep)
+        warnings.warn('Columns do not match!! Dataframe has ' + str(len(df.columns)) + ' columns. CSV file has ' + str(len(pd.read_csv(csvFilePath, nrows=1, sep=sep).columns)) + ' columns.')
+        
+    elif not (df.columns == pd.read_csv(csvFilePath, nrows=1, sep=sep).columns).all():
+        df.to_csv(csvFilePath+str(datetime.utcnow().time()), mode='a', index=False, sep=sep)
+        warnings.warn('Columns and column order of dataframe and csv file do not match!!')
+    
+    # Append the dataframe to the existing file
+    else:
+        df.to_csv(csvFilePath, mode='a', index=False, sep=sep, header=False)
 
 if __name__ == '__main__':
     """
-    Extract data for the sale of motor bikes.
+    Extract details of motorbikes for sale on bikesales.com
     """
+
+    # Create the list of proxies.
+    proxies = get_proxies()
+    proxy_pool = cycle(proxies)
+
+    # Create the list of user agents
+    agents = get_user_agents()
 
     # Set the base url and extract basic information required for cycling through the website.
     baseUrl = 'https://www.bikesales.com.au'
 
-    content = get_html_content(baseUrl)
+    # Get the content of teh first page and extract the number of bikes available.
+    content = get_html_content(baseUrl,user_agents=agents,proxy_pool=proxy_pool)
     html = BeautifulSoup(content, 'html.parser')    
     numberOfBikes = html.find('span', {'class': 'home-page__stock-counter__count'}).text
     numberOfBikes = float(re.sub(r'[^\d.]','',numberOfBikes))
+
     # Set the number of bikes shown on a single page
-    pagelimit = 100
+    pagelimit = 10
     # Calculate the number of pages to cycle through.
     numberOfPages = math.ceil(numberOfBikes/pagelimit)
    
     # Create an empty dictionary for the bike sales data
     bikeSales = {}
-    
-    
+        
     # loop over each page
-    for page in range(numberOfPages):
+    for page in range(2): #numberOfPages):
         
         # Calcaulte the offset for each page display.
         offset = page* pagelimit
@@ -247,29 +314,19 @@ if __name__ == '__main__':
                 'Sort=Premium&Offset='+str(offset)+'&Limit='+str(pagelimit)+'&SearchAction=Pagination'
 
         # Search the current page and Get a list of all bikes on the current page
-        content = get_html_content(url)
+        content = get_html_content(url,user_agents=agents,proxy_pool=proxy_pool)
         html = BeautifulSoup(content, 'html.parser')
         BikeList = html.findAll('a', {'class': 'item-link-container'})
         
         # Cycle through the list of bikes on each search page.
         for bike in BikeList:
 
+            # Grab the next proxy in the list
+            proxy = next(proxy_pool)
+
             # Get the URL for each bike.
             individualBikeURL = bike.attrs['href']
-            BikeContent = get_bike(baseUrl+individualBikeURL,headers=agent) #{'User-Agent': choice(desktop_agents)})
-
-            # Reset the miltipler for each new url
-            #multiplier = 1
-            
-            ### occasionally the connection is lost, so try again.
-            ### Im not sure why the connection is lost, i might be that the site is trying to guard against scraping software.
-            
-            ## If initial attempt to connect to the url was unsuccessful, try again with an increasing delay
-            #while (BikeContent == None):
-            #    # Limit the exponential delay to 16x
-            #    if (multiplier < 16):
-            #        multiplier *= 2
-            #    BikeContent = get_html_content(baseUrl+individualBikeURL,multiplier)
+            BikeContent = get_html_content(baseUrl+individualBikeURL,user_agents=agents,proxy_pool=proxy_pool)
             
             # Extract the data for each bike into a dictionary
             bikeDetails = getBikeDetails(BikeContent)
@@ -282,20 +339,22 @@ if __name__ == '__main__':
                                                   **bikeDetails, 
                                                   'Scraped date': scrapeDate}
 
-    # Convert the dictionary to a pandas dataframe
-    bikeDataFrame = pd.DataFrame.from_dict(bikeSales, orient='index')
+        # Convert the dictionary to a pandas dataframe
+        bikeDataFrame = pd.DataFrame.from_dict(bikeSales, orient='index')
     
-    # Convert learner approved feature into boolean values
-    if ('Learner Approved' in bikeDataFrame):
-        bikeDataFrame['Learner Approved'] = [False if pd.isnull(a) else True for a in bikeDataFrame['Learner Approved']]
-    else:
-        bikeDataFrame['Learner Approved'] = False
+        # Convert learner approved feature into boolean values
+        if ('Learner Approved' in bikeDataFrame):
+            bikeDataFrame['Learner Approved'] = [False if pd.isnull(a) else True for a in bikeDataFrame['Learner Approved']]
+        else:
+            bikeDataFrame['Learner Approved'] = False
 
-    # Create a seller feature, this assumes that if there is a stock number, the seller is a dealer.
-    if ('Stock Number' in bikeDataFrame):
-        bikeDataFrame['Seller'] = ['Private' if pd.isnull(a) else 'Dealer' for a in bikeDataFrame['Stock Number']]
-    else:
-        bikeDataFrame['Seller'] = 'Private'
+        # Create a seller feature, this assumes that if there is a stock number, the seller is a dealer.
+        if ('Stock Number' in bikeDataFrame):
+            bikeDataFrame['Seller'] = ['Private' if pd.isnull(a) else 'Dealer' for a in bikeDataFrame['Stock Number']]
+        else:
+            bikeDataFrame['Seller'] = 'Private'
 
-    # Write the dataframe to a csv file.
-    bikeDataFrame.to_csv('bikeSales-'+str(scrapeDate)+'.csv', index=False)
+        # Write the dataframe to a csv file.
+        #bikeDataFrame.to_csv('bikeSales-'+str(scrapeDate)+'.csv', index=False)
+        appendDFToCSV_void(bikeDataFrame, 'bikeSales-'+str(scrapeDate)+'.csv', sep=",")
+        # NOT TESTED !!!
