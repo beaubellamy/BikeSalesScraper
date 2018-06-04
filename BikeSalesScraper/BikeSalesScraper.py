@@ -3,20 +3,20 @@ from requests.exceptions import RequestException
 from contextlib import closing
 from bs4 import BeautifulSoup
 import pandas as pd
-import unidecode
+#import unidecode
 import numpy as np
 import math
-from fractions import Fraction
+#from fractions import Fraction
 import re
 from datetime import datetime
 import time
 from random import choice
-import itertools
-import collections.abc
+#import itertools
+#import collections.abc
 from lxml.html import fromstring
 from itertools import cycle
 import traceback
-import requests.exceptions
+#import requests.exceptions
 import os
 import warnings
 
@@ -31,6 +31,9 @@ def get_proxies():
     """
     Extract a list of free proxies that can be used avoid the 
     scraper code being detected.
+    
+    Proxy code from:
+    https://www.scrapehero.com/how-to-rotate-proxies-and-ip-addresses-using-python-3/
     """
 
     url = 'https://free-proxy-list.net/'
@@ -86,7 +89,8 @@ def get_html_content(url, multiplier=1,user_agents=default_agent,proxy_pool=set(
     # Be a responisble scraper.
     # The multiplier is used to exponentially increase the delay when 
     # there are several attempts at connecting to the url
-    time.sleep(5*multiplier)
+    randomSleep = random.uniform(2,10)  # Randomise the time to sleep to reduce predictability
+    time.sleep(randomSleep*multiplier)
 
     #Choose the next proxy in the list
     proxy = next(proxy_pool)
