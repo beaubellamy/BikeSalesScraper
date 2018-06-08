@@ -24,6 +24,8 @@ import warnings
 # https://stackoverflow.com/questions/33718932/missing-data-when-scraping-website-using-loop?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa
 # https://stackoverflow.com/questions/9446387/how-to-retry-urllib2-request-when-fails
 
+#HTTPSConnectionPool(host='www.bikesales.com.au', port=443): Max retries exceeded with url: / (Caused by SSLError(SSLError("bad handshake: SysCallError(-1, 'Unexpected EOF')",),))
+
 default_agent = ['Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36']
 
 # Havent confirmed this works yet.
