@@ -10,7 +10,7 @@ import math
 import re
 from datetime import datetime
 import time
-from random import choice
+import random
 #import itertools
 #import collections.abc
 from lxml.html import fromstring
@@ -100,11 +100,12 @@ def get_html_content(url, multiplier=1,user_agents=default_agent,proxy_pool=set(
     # Get the html from the url
     try:
         with closing(get(url,
-                         headers={'User-Agent': choice(agents).rstrip()},
+                         headers={'User-Agent': random.choice(agents).rstrip()},
                          proxies={"http": proxy, "https": proxy})) \
         as resp:
             # Check the response status
             if is_good_response(resp):
+                print ("Success: ",url)
                 return resp.content
             else:
                 # Unable to get the url response
